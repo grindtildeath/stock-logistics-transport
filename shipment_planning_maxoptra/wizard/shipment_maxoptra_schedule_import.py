@@ -107,32 +107,36 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
         scheduled_picking_ids = []
         for batch_picking in following_batch_pickings:
             cnt = 0
-            new_batch = self.env["stock.picking.batch"].create({})
-            # FIXME: If previous_picking have different source location, the
-            #  assignation to the batch will fail, and we should either create
-            #  one batch per source location or ignore some.
             for picking in batch_picking.picking_ids.sorted(
                 "scheduled_date", reverse_order
             ):
                 picking_moves = picking.move_lines
                 previous_moves = picking_moves.move_orig_ids
-                previous_pickings = previous_moves.picking_id
-                for pick in previous_pickings:
-                    # Avoid rescheduling same picking multiple times
-                    if pick.id in scheduled_picking_ids:
-                        continue
-                    pick_values = {"batch_id": new_batch.id}
-                    if start_datetime and operation_duration:
-                        hours, minutes = format_duration(operation_duration).split(":")
-                        delay = relativedelta(
-                            hours=cnt * int(hours), minutes=cnt * int(minutes)
-                        )
-                        pick_values["scheduled_date"] = start_datetime + delay
-                    pick.write(pick_values)
-                    # increment counter manually as we cannot use enumerate
-                    #  on the two nested loops
-                    cnt += 1
-            new_batch_picking_ids.append(new_batch.id)
+                pickings = previous_moves.picking_id
+                pick_locations = pickings.mapped("location_id")
+                for location in pick_locations:
+                    previous_pickings = pickings.filtered(
+                        lambda x: x.location_id.id == location.id
+                    )
+                    for pick in previous_pickings:
+                        new_batch = self.env["stock.picking.batch"].create({})
+                        # Avoid rescheduling same picking multiple times
+                        if pick.id in scheduled_picking_ids:
+                            continue
+                        pick_values = {"batch_id": new_batch.id}
+                        if start_datetime and operation_duration:
+                            hours, minutes = format_duration(operation_duration).split(
+                                ":"
+                            )
+                            delay = relativedelta(
+                                hours=cnt * int(hours), minutes=cnt * int(minutes)
+                            )
+                            pick_values["scheduled_date"] = start_datetime + delay
+                        pick.write(pick_values)
+                        # increment counter manually as we cannot use enumerate
+                        #  on the two nested loops
+                        cnt += 1
+                new_batch_picking_ids.append(new_batch.id)
         return self.env["stock.picking.batch"].browse(new_batch_picking_ids)
 
     def create_delivery_batch_picking_by_vehicle(self, schedule_by_vehicles):
