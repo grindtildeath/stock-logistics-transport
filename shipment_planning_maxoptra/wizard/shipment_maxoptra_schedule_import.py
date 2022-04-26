@@ -74,11 +74,17 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
 
     @api.model
     def _default_start_time(self):
-        user_tz = pytz.timezone(self.env.context.get('tz') or 'UTC')
-        date = pytz.utc.localize(fields.Datetime.now()).astimezone(user_tz)
-        date = date.replace(hour=6, minute=0, second=0)
-        date = date.astimezone(pytz.utc).replace(tzinfo=None)
-        return date
+        """Returns 6:00 of current day, regardless of user's timezone
+        Returns a naive datetime object which, converted to the user's timezone,
+        always shows 6:00 AM of current date
+        """
+        user_tz_str = self.env.user.tz or self._context.get("tz") or "UTC"
+        user_tz = pytz.timezone(user_tz_str)
+        now_tz = datetime.now(user_tz)
+        date_tz = now_tz.replace(hour=6, minute=0, second=0, microsecond=0)
+        date_utc = date_tz.astimezone(pytz.utc)
+        date_naive = date_utc.replace(tzinfo=None)
+        return date_naive
 
     # TODO Add constraints according to warehouse delivery steps?
 
@@ -149,20 +155,19 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
     def create_delivery_batch_picking_by_vehicle(self, schedule_by_vehicles):
         batch_ids = []
         for vehicle_name, maxoptra_deliveries in schedule_by_vehicles.items():
-            for p_type, picks in self._group_pickings_by_type(maxoptra_deliveries):
+            for _type, picks in self._group_pickings_by_type(maxoptra_deliveries):
                 batch_picking_values = self._prepare_batch_picking_values(
                     vehicle_name, driver_name=maxoptra_deliveries[0].get("driver")
                 )
                 batch_picking = self.env["stock.picking.batch"].create(batch_picking_values)
                 batch_ids.append(batch_picking.id)
-                for pick in picks:
-                    pick.write(
-                        {
-                            "batch_id": batch_picking.id,
-                            "vehicle_id": batch_picking.vehicle_id.id,
-                            "driver_id": batch_picking.driver_id.id,
-                        }
-                    )
+                picks.write(
+                    {
+                        "batch_id": batch_picking.id,
+                        "vehicle_id": batch_picking.vehicle_id.id,
+                        "driver_id": batch_picking.driver_id.id,
+                    }
+                )
         return self.env["stock.picking.batch"].browse(batch_ids)
 
     def update_scheduled_date(self, schedule_by_vehicles):
@@ -181,8 +186,8 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
     def _group_pickings_by_type(self, maxoptra_deliveries):
         picking_names = [delivery.get("picking_name") for delivery in maxoptra_deliveries]
         pickings = self.env["stock.picking"].search(
-                    [("name", "in", picking_names)], order="picking_type_id"
-                )
+            [("name", "in", picking_names)], order="picking_type_id"
+        )
         if len(pickings) != len(picking_names):
             p_names = set(pickings.mapped("name"))
             missing_names = set(picking_names) - p_names
@@ -191,8 +196,8 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
                 ", ".join(list(missing_names))
             )
         return groupby(
-                pickings, key=lambda m: m.picking_type_id
-            )
+            pickings, key=lambda m: m.picking_type_id
+        )
 
     def _prepare_batch_picking_values(self, vehicle_name, driver_name=None):
         vehicle = self.env["shipment.vehicle"].search([("name", "=", vehicle_name)])
