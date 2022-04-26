@@ -149,7 +149,7 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
     def create_delivery_batch_picking_by_vehicle(self, schedule_by_vehicles):
         batch_ids = []
         for vehicle_name, maxoptra_deliveries in schedule_by_vehicles.items():
-            for p_type, picks in self._prepare_pickings(maxoptra_deliveries):
+            for p_type, picks in self._group_pickings_by_type(maxoptra_deliveries):
                 batch_picking_values = self._prepare_batch_picking_values(
                     vehicle_name, driver_name=maxoptra_deliveries[0].get("driver")
                 )
