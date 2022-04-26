@@ -11,7 +11,7 @@ from dateutil.relativedelta import relativedelta
 
 from odoo import _, api, fields, models
 from odoo.exceptions import UserError
-from odoo.tools import format_duration
+from odoo.tools import format_duration, groupby
 
 from odoo.addons.base.models.res_partner import _tz_get
 
@@ -96,6 +96,7 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
             )
         self.update_shipment_planning(delivery_batch_pickings)
 
+    # For several picking operation method create separate batches
     def regroup_operations(
         self,
         following_batch_pickings,
@@ -113,16 +114,14 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
                 picking_moves = picking.move_lines
                 previous_moves = picking_moves.move_orig_ids
                 pickings = previous_moves.picking_id
-                pick_locations = pickings.mapped("location_id")
-                for location in pick_locations:
-                    previous_pickings = pickings.filtered(
-                        lambda x: x.location_id.id == location.id
-                    )
+                for _loc, previous_pickings in groupby(
+                    pickings, key=lambda m: m.location_id
+                ):
                     for pick in previous_pickings:
-                        new_batch = self.env["stock.picking.batch"].create({})
                         # Avoid rescheduling same picking multiple times
                         if pick.id in scheduled_picking_ids:
                             continue
+                        new_batch = self.env["stock.picking.batch"].create({})
                         pick_values = {"batch_id": new_batch.id}
                         if start_datetime and operation_duration:
                             hours, minutes = format_duration(operation_duration).split(
@@ -136,7 +135,7 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
                         # increment counter manually as we cannot use enumerate
                         #  on the two nested loops
                         cnt += 1
-                new_batch_picking_ids.append(new_batch.id)
+                    new_batch_picking_ids.append(new_batch.id)
         return self.env["stock.picking.batch"].browse(new_batch_picking_ids)
 
     def create_delivery_batch_picking_by_vehicle(self, schedule_by_vehicles):
