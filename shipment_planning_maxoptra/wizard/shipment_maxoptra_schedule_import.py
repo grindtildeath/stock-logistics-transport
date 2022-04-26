@@ -178,7 +178,7 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
                 }
             )
 
-    def _prepare_pickings(self, maxoptra_deliveries):
+    def _group_pickings_by_type(self, maxoptra_deliveries):
         picking_names = [delivery.get("picking_name") for delivery in maxoptra_deliveries]
         pickings = self.env["stock.picking"].search(
                     [("name", "in", picking_names)], order="picking_type_id"
