@@ -96,7 +96,7 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
             )
         self.update_shipment_planning(delivery_batch_pickings)
 
-    # For several picking operation method create separate batches
+    # Method helps to create separate batches for each picking operation
     def regroup_operations(
         self,
         following_batch_pickings,
@@ -122,7 +122,11 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
                         if pick.id in scheduled_picking_ids:
                             continue
                         new_batch = self.env["stock.picking.batch"].create({})
+                        new_batch_picking_ids.append(new_batch.id)
                         pick_values = {"batch_id": new_batch.id}
+                        # TODO: add field in wizard to allow for pick
+                        # planning simuntaneously or successively.
+                        # For more information see ROADMAP.rst
                         if start_datetime and operation_duration:
                             hours, minutes = format_duration(operation_duration).split(
                                 ":"
@@ -132,10 +136,10 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
                             )
                             pick_values["scheduled_date"] = start_datetime + delay
                         pick.write(pick_values)
+                        scheduled_picking_ids.append(pick.id)
                         # increment counter manually as we cannot use enumerate
                         #  on the two nested loops
                         cnt += 1
-                    new_batch_picking_ids.append(new_batch.id)
         return self.env["stock.picking.batch"].browse(new_batch_picking_ids)
 
     def create_delivery_batch_picking_by_vehicle(self, schedule_by_vehicles):
