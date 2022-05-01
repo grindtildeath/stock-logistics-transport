@@ -130,14 +130,14 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
                 picking_moves = picking.move_lines
                 previous_moves = picking_moves.move_orig_ids
                 pickings = previous_moves.picking_id
-                for _loc, previous_pickings in groupby(
-                    pickings, key=lambda m: m.location_id
+                for _picking_type_id, previous_pickings in groupby(
+                    pickings, key=lambda m: m.picking_type_id
                 ):
+                    new_batch = self.env["stock.picking.batch"].create({})
                     for pick in previous_pickings:
                         # Avoid rescheduling same picking multiple times
                         if pick.id in scheduled_picking_ids:
                             continue
-                        new_batch = self.env["stock.picking.batch"].create({})
                         new_batch_picking_ids.append(new_batch.id)
                         pick_values = {"batch_id": new_batch.id}
                         # TODO: add field in wizard to allow for pick
