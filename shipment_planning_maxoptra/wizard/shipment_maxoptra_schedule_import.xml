@@ -31,12 +31,7 @@
                             name="reverse_order_pick_operations"
                             attrs="{'invisible': [('regroup_pick_operations', '=', False)]}"
                         />
-                        <field name="pick_operations_start_time" />
-                        <field
-                            name="pick_operations_duration"
-                            widget="float_time"
-                            attrs="{'invisible': [('pick_operations_start_time', '=', False)]}"
-                        />
+                        <field name="pick_operations_duration" widget="float_time" />
                     </group>
                 </group>
                 <footer>

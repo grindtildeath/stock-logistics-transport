@@ -10,3 +10,4 @@ class StockPickingBatch(models.Model):
     shipment_planning_id = fields.Many2one("shipment.planning")
     vehicle_id = fields.Many2one("shipment.vehicle")
     driver_id = fields.Many2one("res.partner")
+    driving_start_time = fields.Datetime('Driving Start Time')
