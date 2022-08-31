@@ -9,7 +9,6 @@ from datetime import datetime
 from dateutil.relativedelta import relativedelta
 from freezegun import freeze_time
 
-from odoo import fields
 from odoo.modules.module import get_resource_path
 from odoo.tests import Form, SavepointCase
 
@@ -193,6 +192,8 @@ class TestMaxoptra(SavepointCase):
             )
             # TODO: Test invisible conditions for two steps
         import_wiz = import_wiz_form.save()
+        # if duration time not set scheduled time will be read from file
+        import_wiz.pick_operations_duration = 0
         import_wiz.action_import_schedule()
         # North bay area deliveries are grouped on Vehicle1
         batch_vehicle_1 = self.env["stock.picking.batch"].search(
@@ -224,8 +225,6 @@ class TestMaxoptra(SavepointCase):
                 ("shipment_planning_id", "=", shipment_planning.id),
             ]
         )
-        # Force computation of stock.picking.batch.scheduled_date
-        batch_vehicle_3._compute_scheduled_date()
         self.assertEqual(
             batch_vehicle_3.scheduled_date,
             min(batch_vehicle_3.picking_ids.mapped("scheduled_date")),
@@ -267,7 +266,13 @@ class TestMaxoptra(SavepointCase):
                 **action_open_import_wiz.get("context")
             )
         )
-        pick_start_time = fields.Datetime.now() - relativedelta(hours=4)
+        # pick start time is earliest time in batch
+        batch1_start_time = datetime.strptime(
+            "2022-01-25 16:00:26", "%Y-%m-%d %H:%M:%S"
+        )
+        batch2_start_time = datetime.strptime(
+            "2022-01-25 17:10:16", "%Y-%m-%d %H:%M:%S"
+        )
         pick_operation_duration = 0.25
         with open(maxoptra_file_path, "rb") as maxoptra_file:
             import_wiz_form.maxoptra_schedule_file = base64.b64encode(
@@ -275,7 +280,6 @@ class TestMaxoptra(SavepointCase):
             )
             import_wiz_form.regroup_pick_operations = True
             import_wiz_form.reverse_order_pick_operations = True
-            import_wiz_form.pick_operations_start_time = pick_start_time
             import_wiz_form.pick_operations_duration = pick_operation_duration
         import_wiz = import_wiz_form.save()
         import_wiz.action_import_schedule()
@@ -284,6 +288,7 @@ class TestMaxoptra(SavepointCase):
             [
                 ("vehicle_id", "=", self.vehicle1.id),
                 ("shipment_planning_id", "=", shipment_planning.id),
+                ("picking_type_id.code", "=", "outgoing"),
             ]
         )
         self.assertEqual(self.delivery_azure.batch_id, delivery_batch_vehicle_1)
@@ -293,38 +298,57 @@ class TestMaxoptra(SavepointCase):
         self.assertEqual(delivery_batch_vehicle_1.driver_id, self.driver1)
         for delivery in delivery_batch_vehicle_1.picking_ids:
             self.assertEqual(delivery.driver_id, self.driver1)
+        self.assertEqual(delivery_batch_vehicle_1.driving_start_time, batch1_start_time)
         # North bay area pick pickings
         pick_pickings_vehicle_1 = self._get_previous_pickings(
             delivery_batch_vehicle_1.picking_ids
         )
         pick_batch_vehicle_1 = pick_pickings_vehicle_1.mapped("batch_id")
         self.assertEqual(len(pick_batch_vehicle_1), 1)
-        self.assertFalse(pick_batch_vehicle_1.driver_id)
+        self.assertEqual(pick_batch_vehicle_1.driver_id, self.driver1)
+        # outgoing pickings resheduled
+        self.assertEqual(self.delivery_lumber.scheduled_date, batch1_start_time)
+        self.assertEqual(
+            self.delivery_ready.scheduled_date,
+            batch1_start_time + relativedelta(minutes=15),
+        )
+        self.assertEqual(
+            self.delivery_jackson.scheduled_date,
+            batch1_start_time + relativedelta(minutes=30),
+        )
+        self.assertEqual(
+            self.delivery_azure.scheduled_date,
+            batch1_start_time + relativedelta(minutes=45),
+        )
+        # internal pickings resheduled, order should follow outgoing batch
         self.assertEqual(
             self._get_previous_pickings(self.delivery_lumber).scheduled_date,
-            pick_start_time,
+            batch1_start_time,
         )
         self.assertEqual(
             self._get_previous_pickings(self.delivery_ready).scheduled_date,
-            pick_start_time + relativedelta(minutes=15),
+            batch1_start_time + relativedelta(minutes=15),
         )
         self.assertEqual(
             self._get_previous_pickings(self.delivery_jackson).scheduled_date,
-            pick_start_time + relativedelta(minutes=30),
+            batch1_start_time + relativedelta(minutes=30),
         )
         self.assertEqual(
             self._get_previous_pickings(self.delivery_azure).scheduled_date,
-            pick_start_time + relativedelta(minutes=45),
+            batch1_start_time + relativedelta(minutes=45),
         )
         # South bay area deliveries are grouped on Vehicle3
         delivery_batch_vehicle_3 = self.env["stock.picking.batch"].search(
             [
                 ("vehicle_id", "=", self.vehicle3.id),
                 ("shipment_planning_id", "=", shipment_planning.id),
+                ("picking_type_id.code", "=", "outgoing"),
             ]
         )
         self.assertEqual(self.delivery_gemini.batch_id, delivery_batch_vehicle_3)
         self.assertEqual(self.delivery_deco_addict.batch_id, delivery_batch_vehicle_3)
+        self.assertEqual(delivery_batch_vehicle_3.driving_start_time, batch2_start_time)
+
         self.assertEqual(delivery_batch_vehicle_3.driver_id, self.driver3)
         for delivery in delivery_batch_vehicle_3.picking_ids:
             self.assertEqual(delivery.driver_id, self.driver3)
@@ -334,13 +358,19 @@ class TestMaxoptra(SavepointCase):
         )
         pick_batch_vehicle_3 = pick_pickings_vehicle_3.mapped("batch_id")
         self.assertEqual(len(pick_batch_vehicle_3), 1)
-        self.assertFalse(pick_batch_vehicle_3.driver_id)
+        self.assertEqual(pick_batch_vehicle_3.driver_id, self.driver3)
+        # outgoing pickings resheduled
+        self.assertEqual(self.delivery_deco_addict.scheduled_date, batch2_start_time)
+        self.assertEqual(
+            self.delivery_gemini.scheduled_date,
+            batch2_start_time + relativedelta(minutes=15),
+        )
+        # internal pickings resheduled, order should follow outgoing batch
         self.assertEqual(
             self._get_previous_pickings(self.delivery_deco_addict).scheduled_date,
-            pick_start_time,
+            batch2_start_time,
         )
         self.assertEqual(
             self._get_previous_pickings(self.delivery_gemini).scheduled_date,
-            pick_start_time + relativedelta(minutes=15),
+            batch2_start_time + relativedelta(minutes=15),
         )
-        # TODO scheduled_date doesn't have impact on scheduled_date on batch

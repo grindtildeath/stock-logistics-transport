@@ -8,6 +8,7 @@
             <field name="scheduled_date" position="after">
                 <field name="vehicle_id" />
                 <field name="driver_id" />
+                <field name="driving_start_time" />
             </field>
         </field>
     </record>
