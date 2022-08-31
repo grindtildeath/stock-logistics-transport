@@ -58,6 +58,7 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
         help="Duration between each pick operation",
         default=0.083,
     )
+    info_msg = fields.Text(readonly=True)
 
     @api.model
     def default_get(self, fields_list):
@@ -79,6 +80,15 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
         self.ensure_one()
         pick_batches = self.env["stock.picking.batch"]
         maxoptra_schedule = self.read_csv()
+        self._check_pickings(maxoptra_schedule)
+        if self.info_msg and not self.env.context.get("skip_missing", False):
+            return {
+                "type": "ir.actions.act_window",
+                "res_model": self._name,
+                "res_id": self.id,
+                "target": "new",
+                "view_mode": "form",
+            }
         schedule_by_vehicles = self.group_schedule_by_vehicle(maxoptra_schedule)
         delivery_batch_pickings = self.create_delivery_batch_picking_by_vehicle(
             schedule_by_vehicles
@@ -181,7 +191,7 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
                 }
             )
 
-    def _group_pickings_by_type(self, maxoptra_deliveries):
+    def _check_pickings(self, maxoptra_deliveries):
         picking_names = [
             delivery.get("picking_name") for delivery in maxoptra_deliveries
         ]
@@ -191,10 +201,17 @@ class ShipmentMaxoptraScheduleImport(models.TransientModel):
         if len(pickings) != len(picking_names):
             p_names = set(pickings.mapped("name"))
             missing_names = set(picking_names) - p_names
-            raise UserError(
-                _("No matching picking found for Order reference \n %s")
-                % ", ".join(list(missing_names))
-            )
+            self.info_msg = _(
+                "No matching picking found for Order reference \n %s"
+            ) % ", ".join(list(missing_names))
+
+    def _group_pickings_by_type(self, maxoptra_deliveries):
+        picking_names = [
+            delivery.get("picking_name") for delivery in maxoptra_deliveries
+        ]
+        pickings = self.env["stock.picking"].search(
+            [("name", "in", picking_names)], order="picking_type_id"
+        )
         return self._group_to_batch_flow(pickings)
 
     def _group_to_batch_flow(self, pickings):

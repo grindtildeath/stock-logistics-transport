@@ -348,7 +348,7 @@ class TestMaxoptra(SavepointCase):
         self.assertEqual(self.delivery_gemini.batch_id, delivery_batch_vehicle_3)
         self.assertEqual(self.delivery_deco_addict.batch_id, delivery_batch_vehicle_3)
         self.assertEqual(delivery_batch_vehicle_3.driving_start_time, batch2_start_time)
-        
+
         self.assertEqual(delivery_batch_vehicle_3.driver_id, self.driver3)
         for delivery in delivery_batch_vehicle_3.picking_ids:
             self.assertEqual(delivery.driver_id, self.driver3)

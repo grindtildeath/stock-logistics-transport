@@ -34,12 +34,24 @@
                         <field name="pick_operations_duration" widget="float_time" />
                     </group>
                 </group>
+                <group name="name" attrs="{'invisible': [('info_msg', '=', False)]}">
+                    <field name="info_msg" nolabel="1" />
+                </group>
                 <footer>
                     <button
                         name="action_import_schedule"
                         string="Import schedule"
                         type="object"
                         class="btn-primary"
+                        attrs="{'invisible': [('info_msg', '!=', False)]}"
+                    />
+                    <button
+                        name="action_import_schedule"
+                        string="Import schedule (skip missing)"
+                        type="object"
+                        class="btn-primary"
+                        context="{'skip_missing': 'True'}"
+                        attrs="{'invisible': [('info_msg', '=', False)]}"
                     />
                     <button string="Cancel" class="btn-secondary" special="cancel" />
                 </footer>
