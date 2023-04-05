@@ -59,6 +59,17 @@ class ShipmentPlanning(models.Model):
         )
         return True
 
+    def _format_values(self, values):
+        # If there's a return in a value, maxoptra csv import will fail,
+        # so we replace them by spaces here.
+        formatted_values = []
+        for value in values:
+            if isinstance(value, str):
+                value = value.replace("\n", " ")
+                value = value.replace("\r", " ")
+            formatted_values.append(value)
+        return formatted_values
+
     def _create_csv(self):
         buff = io.BytesIO()
         writer = pycompat.csv_writer(buff, quoting=1)
@@ -67,7 +78,7 @@ class ShipmentPlanning(models.Model):
 
         for pick in self.picking_to_plan_ids:
             row = self.prepare_row(pick)
-            writer.writerow(row)
+            writer.writerow(self._format_values(row))
         csv_value = buff.getvalue()
         buff.close()
         return csv_value
